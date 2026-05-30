@@ -6,12 +6,15 @@
 WHAT IS IN THIS PACKAGE?
 ------------------------
 
-A bundle of developer tools that install WITHOUT administrator
-rights. You do NOT need the admin password. No "Run as
-administrator", no UAC prompt.
+A set of installer scripts that set up developer tools WITHOUT
+administrator rights. You do NOT need the admin password. No
+"Run as administrator", no UAC prompt.
 
-Tools included (all pre-downloaded, no internet needed during
-install):
+The installer DOWNLOADS the tools from their official sources at
+install time, so an internet connection IS required while it
+runs. (The repo itself is tiny — just the scripts.)
+
+Tools installed (pinned versions, see versions.json):
 
    * Git              2.54.0
    * Node.js          24.16.0
@@ -31,18 +34,28 @@ and added to your personal PATH (no machine-wide changes).
   INSTALLATION
 ================================================================
 
-STEP 1.  Extract the ZIP archive
---------------------------------
-   1. Right-click "ai-devkit-win-portable-*.zip"
-      -> "Extract All..." -> pick a writable location (Desktop
-      or Downloads is fine).
-   2. Open the extracted folder. You will see:
+STEP 1.  Get the package from GitHub
+------------------------------------
+   Pick ONE of the two ways below.
+
+   A) git clone  (if you have Git already)
+         git clone <repo-url> ai-devkit-win-portable
+      This creates a folder "ai-devkit-win-portable".
+
+   B) Download ZIP  (no Git needed)
+         1. Open the repository page on GitHub.
+         2. Click the green "Code" button -> "Download ZIP".
+         3. Right-click the downloaded ZIP -> "Extract All..."
+            -> pick a writable location (Desktop or Downloads).
+         The extracted folder is "ai-devkit-win-portable-main".
+
+   Either way, open the folder. You will see:
          install.ps1
          activate.ps1
          uninstall.ps1
          README.txt
          versions.json
-         payload\
+   (No "payload\" folder — the installer downloads the tools.)
 
 STEP 2.  Open a regular PowerShell window
 -----------------------------------------
@@ -54,7 +67,9 @@ STEP 2.  Open a regular PowerShell window
 
 STEP 3.  Change directory to the extracted folder
 -------------------------------------------------
-   In the PowerShell window, type (replace the path with yours):
+   In the PowerShell window, type (replace the path with yours;
+   the folder is "ai-devkit-win-portable" if you cloned, or
+   "ai-devkit-win-portable-main" if you downloaded the ZIP):
 
       cd $env:USERPROFILE\Desktop\ai-devkit-win-portable
 
@@ -69,13 +84,15 @@ STEP 4.  Run the installer
       powershell -ExecutionPolicy Bypass -File .\install.ps1
 
    Press Enter. The script will:
-      - copy Git, Node.js, Python, AWS CLI, Claude Code into
-        C:\Users\<you>\ai-devkit
+      - download Git, Node.js, Python, AWS CLI from their
+        official sources into .\payload
+      - install them into C:\Users\<you>\ai-devkit
       - bootstrap pip for Python
-      - install claude-code locally via npm
+      - install claude-code via npm (from the npm registry)
       - add the tools to your user PATH
 
-   Typical runtime: 2-5 minutes. No UAC prompts will appear.
+   Typical runtime: 3-10 minutes depending on your connection
+   (~170 MB is downloaded). No UAC prompts will appear.
 
 STEP 5.  Close PowerShell and open a NEW window
 -----------------------------------------------
@@ -160,6 +177,13 @@ AWS CLI MSI fails with error 1625 or 1603
    Confirm that the path ending in "ai-devkit\npm-global" is
    present. If not — re-open PowerShell, or run activate.ps1.
 
+A download fails (no internet / proxy / firewall)
+   The installer needs internet to fetch the tools. On a
+   restricted network, ask a maintainer for a pre-staged
+   "payload\" folder (built with: ./build.sh --prefetch), drop
+   it next to install.ps1, and re-run — the installer reuses any
+   file already present in payload\ instead of downloading it.
+
 Antivirus quarantines PortableGit-*.7z.exe
    Some corporate AVs flag self-extracting 7z files. Whitelist
    the payload folder, or unblock the file with PowerShell:
@@ -190,13 +214,24 @@ Antivirus quarantines PortableGit-*.7z.exe
 
 
 ================================================================
-  MAINTAINERS — rebuilding the package
+  MAINTAINERS — bumping versions
 ================================================================
 
-On Linux / macOS / WSL:
+There is no ZIP build anymore: the package is distributed via
+git (clone or GitHub "Download ZIP"), and install.ps1 downloads
+the tools at install time.
 
-   ./build.sh
+To change pinned versions, edit the variables at the top of
+build.sh, then regenerate the manifest (Linux / macOS / WSL):
 
-Produces dist/ai-devkit-win-portable-YYYYMMDD.zip (~170 MB).
+   ./build.sh            # rewrites versions.json (no network)
 
-Pinned versions live at the top of build.sh.
+Commit versions.json. install.ps1 reads its URLs to download
+each tool.
+
+To support OFFLINE installs, pre-stage the binaries:
+
+   ./build.sh --prefetch   # downloads into ./payload (gitignored)
+
+Ship that payload\ folder alongside the scripts; install.ps1
+reuses any file it finds there instead of downloading.

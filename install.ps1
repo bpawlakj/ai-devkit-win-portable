@@ -5,6 +5,12 @@ Runs entirely in user-mode: no admin, no UAC, no MSI elevation.
 Installs Git, Node.js, npm, Python, AWS CLI, and Claude Code into
 %USERPROFILE%\ai-devkit, then adds each tool to the user PATH.
 
+Tool binaries are downloaded from upstream at install time (an internet
+connection is required). URLs are read from versions.json. If a matching
+file already exists in .\payload it is reused instead of re-downloaded,
+so a maintainer can pre-stage .\payload (./build.sh --prefetch) for a
+fully offline install.
+
 Usage:
   powershell -ExecutionPolicy Bypass -File .\install.ps1
 #>
@@ -37,18 +43,41 @@ function Add-UserPath([string]$dir) {
   $env:Path = "$dir;$env:Path"
 }
 
-# ---------- locate payload ----------
+# ---------- download helper ----------
+# Reuse a pre-staged file in .\payload if present, otherwise download it.
+function Get-Payload([string]$url, [string]$dest) {
+  $name = Split-Path $dest -Leaf
+  if (Test-Path $dest) { Write-Ok "cached: $name"; return }
+  Write-Ok "downloading: $name"
+  try {
+    Invoke-WebRequest -Uri $url -OutFile "$dest.partial" -UseBasicParsing
+    Move-Item "$dest.partial" $dest -Force
+  } catch {
+    if (Test-Path "$dest.partial") { Remove-Item "$dest.partial" -Force }
+    Die "failed to download $name from $url`n$($_.Exception.Message)"
+  }
+}
+
+# ---------- locate manifest + payload ----------
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PayloadDir  = Join-Path $ScriptDir 'payload'
 $VersionsFile= Join-Path $ScriptDir 'versions.json'
-if (-not (Test-Path $PayloadDir))   { Die "payload\ directory not found next to install.ps1" }
-if (-not (Test-Path $VersionsFile)) { Die "versions.json not found" }
+if (-not (Test-Path $VersionsFile)) { Die "versions.json not found next to install.ps1" }
+if (-not (Test-Path $PayloadDir))   { New-Item -ItemType Directory -Path $PayloadDir | Out-Null }
 
 $V = Get-Content $VersionsFile -Raw | ConvertFrom-Json
 
 Write-Step "ai-devkit portable installer"
 Write-Ok   "install root : $InstallRoot"
 Write-Ok   "payload dir  : $PayloadDir"
+
+# ---------- 0. download binaries (skips any already in payload\) ----------
+Write-Step "Downloading tool binaries (reusing payload\ when present)"
+Get-Payload $V.git_url    (Join-Path $PayloadDir $V.git_file)
+Get-Payload $V.node_url   (Join-Path $PayloadDir $V.node_file)
+Get-Payload $V.python_url (Join-Path $PayloadDir $V.python_file)
+Get-Payload $V.getpip_url (Join-Path $PayloadDir 'get-pip.py')
+Get-Payload $V.awscli_url (Join-Path $PayloadDir 'AWSCLIV2.msi')
 
 if ((Test-Path $InstallRoot) -and -not $Force) {
   Write-Warn "$InstallRoot already exists. Re-run with -Force to overwrite."
@@ -147,10 +176,15 @@ Write-Ok "aws → $AwsCliPath"
 
 # ---------- 5. Claude Code ----------
 Write-Step "Installing Claude Code $($V.claude_code)"
-$ClaudeTgz = Get-ChildItem $PayloadDir -Filter 'anthropic-ai-claude-code-*.tgz' | Select-Object -First 1
-if (-not $ClaudeTgz) { Die "missing claude-code tarball" }
 $NpmCmd = Join-Path $NodeDir 'npm.cmd'
-& $NpmCmd install -g $ClaudeTgz.FullName 2>&1 | Out-Null
+$ClaudeTgz = Get-ChildItem $PayloadDir -Filter 'anthropic-ai-claude-code-*.tgz' | Select-Object -First 1
+if ($ClaudeTgz) {
+  Write-Ok "using staged tarball: $($ClaudeTgz.Name)"
+  & $NpmCmd install -g $ClaudeTgz.FullName 2>&1 | Out-Null
+} else {
+  Write-Ok "installing from npm registry"
+  & $NpmCmd install -g "@anthropic-ai/claude-code@$($V.claude_code)" 2>&1 | Out-Null
+}
 $ClaudeExe = Join-Path $NpmGlobal 'claude.cmd'
 if (-not (Test-Path $ClaudeExe)) {
   $ClaudeExe = Join-Path $NpmGlobal 'claude-code.cmd'

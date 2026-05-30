@@ -4,28 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A packaging project that bundles a developer toolchain (Git, Node.js, npm, Python, AWS CLI, Claude Code CLI) into a single ZIP that a Windows user **without administrator rights** can install. There is no application code here — the "product" is the installer and the artifact it produces.
+A packaging project that sets up a developer toolchain (Git, Node.js, npm, Python, AWS CLI, Claude Code CLI) on Windows for a user **without administrator rights**. There is no application code here — the "product" is the installer scripts. The package is distributed via git (clone or GitHub "Download ZIP"); the repo holds only the scripts + `versions.json`, and `install.ps1` downloads the tool binaries from upstream at install time.
 
 The defining constraint that shapes every script: **everything must run in Windows user-mode — no admin, no UAC, no machine-wide changes.** When modifying any script, preserve this. Concretely it means: install into `%USERPROFILE%\ai-devkit`, write only to user-scope PATH (`HKCU\Environment`), and use per-user MSI flags (`ALLUSERS=2 MSIINSTALLPERUSER=1`) so msiexec never elevates.
 
-## Two-sided architecture
+## Architecture
 
-The repo is built on one OS and consumed on another:
+- **`build.sh`** — runs on Linux/macOS/WSL. Its primary job is to (re)generate `versions.json` from the pinned version variables at the top of the file (no network needed). With `--prefetch` it also downloads the binaries into `./payload` (and `npm pack`s the Claude Code tarball) to enable a fully offline install — but that folder is gitignored and optional.
+- **Install side (`install.ps1`, `activate.ps1`, `uninstall.ps1`)** — run on Windows from inside the cloned/extracted folder. `install.ps1` **downloads** each binary from the URLs in `versions.json` into `./payload` (reusing any file already present, so a pre-staged `payload/` makes it offline), then installs into `%USERPROFILE%\ai-devkit`. Claude Code is installed from the npm registry unless an `anthropic-ai-claude-code-*.tgz` is staged in `payload/`. An internet connection is required at install time.
 
-- **Build side (`build.sh`)** — runs on Linux/macOS/WSL. Downloads pinned upstream Windows binaries into `build/payload/`, packs the Claude Code npm tarball offline (`npm pack`), writes `versions.json`, copies the three `.ps1` scripts + `README.txt`, and zips `build/` into `dist/ai-devkit-win-portable-YYYYMMDD.zip` (~170 MB).
-- **Install side (`install.ps1`, `activate.ps1`, `uninstall.ps1`)** — run on Windows from inside the extracted ZIP. The install is fully **offline**: every binary is pre-downloaded in `payload/`, nothing is fetched at install time.
+**`versions.json` is the contract.** `build.sh` generates it from the pinned variables; `install.ps1` reads both the filenames (`$V.git_file`, …) and the download URLs (`$V.git_url`, `$V.node_url`, `$V.python_url`, `$V.getpip_url`, `$V.awscli_url`). If you change a pinned version, filename, or add a tool, update the `versions.json` writer (build.sh) and its readers (install.ps1) in lockstep, then re-run `./build.sh` and commit the regenerated `versions.json`.
 
-**`versions.json` is the contract between the two sides.** `build.sh` generates it from the pinned version variables at the top of the file; `install.ps1` reads it (`$V.git_file`, `$V.node_file`, `$V.python_file`, etc.) to locate payload files and print versions. If you change a payload filename or add a tool in `build.sh`, you must update both the `versions.json` writer (build.sh) and its readers (install.ps1) in lockstep, or the installer will fail with "missing <file>".
-
-Pinned versions live **only** at the top of `build.sh` (lines ~9-14). That is the single source of truth — `README.txt` lists them for humans but is not read by any script.
+Pinned versions live **only** at the top of `build.sh`. That is the single source of truth — `README.txt` lists them for humans but is not read by any script. `versions.json` is committed and is the generated artifact of that source.
 
 ## Common commands
 
 ```bash
-./build.sh          # build dist/ai-devkit-win-portable-YYYYMMDD.zip (needs: curl, zip, npm)
+./build.sh              # regenerate versions.json (no network; commit the result)
+./build.sh --prefetch   # also download binaries into ./payload for offline installs (needs: curl, npm)
 ```
 
-`build.sh` caches downloads in `build/payload/` and skips re-fetching existing files — but note it runs `rm -rf build dist` at the start, so the cache does not survive between runs. There is no test suite; verification is manual (extract the ZIP on Windows and run `install.ps1`).
+There is no ZIP build and no test suite; verification is manual (clone/extract on Windows and run `install.ps1`).
 
 Windows install/uninstall (run by the end user, not in this dev environment):
 
@@ -37,7 +36,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoPathUpdate   # don't t
 powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
-`build/` and `dist/` are gitignored build artifacts — do not edit files under `build/` (they are overwritten copies of the root `.ps1`/`README.txt`/generated `versions.json`).
+`payload/` is gitignored — it holds binaries downloaded by `install.ps1` (or pre-staged via `build.sh --prefetch`), never commit it. (`build/` and `dist/` are legacy ignores from the old ZIP build and are no longer produced.)
 
 ## Install-side conventions to preserve
 

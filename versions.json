@@ -1,0 +1,14 @@
+{
+  "git":          "2.54.0",
+  "node":         "24.16.0",
+  "python":       "3.14.3",
+  "claude_code":  "2.1.76",
+  "git_file":     "PortableGit-2.54.0-64-bit.7z.exe",
+  "node_file":    "node-v24.16.0-win-x64.zip",
+  "python_file":  "python-3.14.3-embed-amd64.zip",
+  "git_url":      "https://github.com/git-for-windows/git/releases/download/v2.54.0.windows.1/PortableGit-2.54.0-64-bit.7z.exe",
+  "node_url":     "https://nodejs.org/dist/v24.16.0/node-v24.16.0-win-x64.zip",
+  "python_url":   "https://www.python.org/ftp/python/3.14.3/python-3.14.3-embed-amd64.zip",
+  "getpip_url":   "https://bootstrap.pypa.io/get-pip.py",
+  "awscli_url":   "https://awscli.amazonaws.com/AWSCLIV2.msi"
+}
