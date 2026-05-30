@@ -24,7 +24,11 @@ $dirs = @(
   (Join-Path $InstallRoot 'npm-global'),
   (Join-Path $InstallRoot 'python'),
   (Join-Path $InstallRoot 'python\Scripts'),
-  (Join-Path $InstallRoot 'aws')
+  (Join-Path $InstallRoot 'aws'),
+  # AWS CLI v2's per-user MSI ignores INSTALLDIR and lands here instead.
+  (Join-Path $env:LOCALAPPDATA 'Programs\Amazon\AWSCLIV2'),
+  # Claude Code is installed by its official installer to %USERPROFILE%\.local\bin.
+  (Join-Path $env:USERPROFILE '.local\bin')
 ) | Where-Object { Test-Path $_ }
 
 $prefix = ($dirs -join ';')

@@ -17,7 +17,10 @@ GIT_VERSION="2.54.0"
 GIT_BUILD="1"                        # PortableGit-<ver>.windows.<build>
 NODE_VERSION="24.16.0"
 PYTHON_VERSION="3.14.3"
-CLAUDE_CODE_VERSION="2.1.76"
+# Passed to the official Claude Code installer as its install target. Use
+# "stable" / "latest" to track the channel (matches `irm .../install.ps1 | iex`),
+# or pin a semver like "2.1.76" for a reproducible build.
+CLAUDE_CODE_VERSION="stable"
 AWSCLI_URL="https://awscli.amazonaws.com/AWSCLIV2.msi"
 GETPIP_URL="https://bootstrap.pypa.io/get-pip.py"
 
@@ -73,15 +76,17 @@ EOF
 log "done: versions.json"
 
 # ---- optional: pre-download binaries for offline installs ----
+# Note: Claude Code is NOT pre-staged. install.ps1 installs it via the official
+# installer (https://claude.ai/install.ps1), which downloads a native binary
+# whose version + checksum are resolved live, so it always needs internet.
 if [[ "${1:-}" == "--prefetch" ]]; then
-  require curl npm
+  require curl
   mkdir -p "$PAYLOAD_DIR"
   fetch "$GIT_URL"    "$PAYLOAD_DIR/$GIT_FILE"
   fetch "$NODE_URL"   "$PAYLOAD_DIR/$NODE_FILE"
   fetch "$PY_URL"     "$PAYLOAD_DIR/$PY_FILE"
   fetch "$GETPIP_URL" "$PAYLOAD_DIR/get-pip.py"
   fetch "$AWSCLI_URL" "$PAYLOAD_DIR/AWSCLIV2.msi"
-  log "npm pack @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
-  ( cd "$PAYLOAD_DIR" && npm pack "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" >/dev/null )
   log "payload staged for offline install: $PAYLOAD_DIR"
+  log "(Claude Code is fetched live by its official installer — not pre-staged)"
 fi
